@@ -1,0 +1,5 @@
+{
+    "watch": ["src"],
+    "ext": "ts,json",
+    "exec": "tsc && cpx src/*.json dist && node ."
+}

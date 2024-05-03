@@ -1,0 +1,20 @@
+{
+    "#comment": "hey guys these are the statuses",
+    "#comment2": "the ones that are just strings are normal",
+    "#comment3": "the array ones (surrounded by brackets) have something like 'Playing...' in front of them",
+    "#comment4": "the arrays are formatted [status, type] where type is a number from 0-5",
+    "#comment5": "each number corresponds to a message put in front of the status message. you can find details on each number in the link below",
+    "#url": "https://discord-api-types.dev/api/discord-api-types-v10/enum/ActivityType",
+    "#comment6": "everything else concerning these is automated",
+    "stats": [
+        "swbat",
+        "swab-at",
+        "pshhh",
+        ["teachers vs students basketball", 5],
+        ["grading DBQs", 0],
+        ["making food for other people", 1],
+        ["going bionic", 0],
+        ["tickling teddy", 0],
+        ["edging music", 2]
+    ]
+}
