@@ -1,16 +1,27 @@
+const bL = Date.now();
 import { config } from 'dotenv';
 import _ora from 'ora';
 // @ts-ignore
 import { join } from 'desm';
+import notify from 'sd-notify';
 import { join as pJoin } from 'node:path';
 import { closeSync as close, readFileSync as rf } from 'node:fs';
 import { readdir, type FileHandle } from 'node:fs/promises';
-import { Client, Collection, GatewayIntentBits, REST, Routes, ActivityType, type SlashCommandBuilder, type CommandInteraction, type RESTPostAPIChatInputApplicationCommandsJSONBody, type Guild } from 'discord.js';
+import { Client, Collection, GatewayIntentBits, REST, Routes, ActivityType,
+    type SlashCommandBuilder, type CommandInteraction, type RESTPostAPIChatInputApplicationCommandsJSONBody, type Guild } from 'discord.js';
+import Base, { type Action } from './Base.js';
+import Server from './Server.js';
+console.log(`${Date.now() - bL}ms to load mods`)
 
 // setup
 const ora = (text: string) => _ora({ text, spinner: 'bouncingBall' }).start();
 config();
-if (!process.env.TOKEN || !process.env.CLIENT || !process.env.GUILD) throw new Error('Missing either $TOKEN, $CLIENT, or $GUILD environment variables');
+if (
+    !process.env.TOKEN || !process.env.CLIENT || !process.env.GUILD ||
+    !process.env.NGROK_AUTHTOKEN ||
+    !process.env.DEVICE_TYPE || !process.env.OTHER_IP ||
+    !process.env.BOT_CHANNEL || !process.env.RON)
+    throw new Error('Missing either $TOKEN, $CLIENT, $GUILD, $NGROK_AUTHTOKEN, $DEVICE_TYPE, $OTHER_IP, $BOT_CHANNEL, or $RON environment variable(s)');
 
 // version check
 const ver: number[] = process.version.split('.').map(v => {
@@ -22,10 +33,13 @@ if (ver[0] < 18 ? true : ver[0] === 18 ? ver[1] < 20 : false) throw new Error(`N
 export interface GenericCmdInstance {
     data: SlashCommandBuilder;
     setGuild?: (guild: Guild) => Promise<void>;
-    exec: (int: CommandInteraction) => Promise<void>;
-    ready: Promise<void> | boolean;
-    fd: FileHandle;
-    closed: boolean;
+    exec: (int: CommandInteraction) => Promise<void | string>;
+    fromId?: (id: string) => Action;
+    setIds?: (ids: Collection<string, Base<Action>>) => void;
+    setUptime?: (st: number) => void;
+    ready?: Promise<void> | boolean;
+    fd?: FileHandle;
+    closed?: boolean;
 }
 export interface GenericCmd {
     new(): GenericCmdInstance
@@ -35,15 +49,25 @@ export type ClientExtra = Client & {
     guild: Guild;
 }
 
+let server;
+if (process.env.DEVICE_TYPE.toLowerCase() !== 'rpi') {
+    server = await Server.connect(process.env.OTHER_IP);
+} else server = new Server();
+
 const client = <ClientExtra>new Client({
     intents: [
         ...<number[]>Object.values(GatewayIntentBits)
     ]
 });
+server.on('transfer', client.destroy);
+server.on('start', () => {
+    client.login();
+});
 
 // load commands
 let spin = ora('Loading commands');
 client.commands = new Collection();
+const ids = new Collection<string, Base<Action>>();
 const cmdDir = join(import.meta.url, 'cmds');
 const cmds = await readdir(cmdDir, {
     recursive: true,
@@ -67,7 +91,9 @@ for (const name of cmds) {
 // handle exit
 function exit() {
     for (const cmd of client.commands.values()) {
-        if (cmd.fd && !cmd.closed) close(cmd.fd.fd);
+        try {
+            if (cmd.fd && !cmd.closed) close(cmd.fd.fd);
+        } catch {};
     }
     // @ts-ignore
     if (this.exit) process.exit();
@@ -78,6 +104,11 @@ const sigs: string[] = [
     'SIGUSR1', 'SIGUSR2'
 ]
 let ready = false;
+
+function isBase(b: GenericCmdInstance): boolean {
+    return (<Base<Action>><unknown>b)?.isBase;
+}
+
 //for (const sig of sigs) process.on(sig, exit.bind({exit: sig !== 'exit'}));
 client.on('interactionCreate', async int => {
     if (!int.isChatInputCommand()) return;
@@ -95,7 +126,9 @@ client.on('interactionCreate', async int => {
     }
     console.log(`Recieved cmd ${int.commandName}`);
     try {
-        await cmd.exec(int);
+        if (cmd.setIds) cmd.setIds(ids);
+        const e = await cmd.exec(int);
+        if (e && isBase(cmd)) ids.set(e, <Base<Action>><unknown>cmd);
     } catch (err) {
         console.error(err);
         try {
@@ -136,13 +169,16 @@ client.on('ready', async c => {
     const prs: Promise<void>[] = [];
     for (const cmd of client.commands.values()) {
         if (cmd.setGuild) prs.push(cmd.setGuild(guild));
+        if (cmd.setUptime) cmd.setUptime(bL);
     }
     try {
         if (prs.length > 0) await Promise.all(prs);
     } catch (err) {
         console.error(err);
     }
+    ready = true;
     console.log('Ready');
+    notify.ready();
     c.user.setStatus('online');
     type StatArray = (string | number)[];
     let statuses: (string | StatArray)[];

@@ -1,9 +1,9 @@
 import { join } from 'node:path';
-import { existsSync as exists, constants } from "node:fs";
+import { existsSync as exists, constants, PathLike } from "node:fs";
 import { access, mkdir, readFile, writeFile, lstat, open, rm, type FileHandle } from 'node:fs/promises';
 import { type EventEmitter } from 'node:events';
 
-type FHandle = FileHandle & EventEmitter;
+export type FHandle = FileHandle & EventEmitter;
 
 export default class Cache {
     ready: Promise<void> | boolean;
@@ -49,5 +49,11 @@ export default class Cache {
             this.closed = true;
         });
         await cb();
+    }
+    async createFd(path: PathLike) {
+        if (!exists(path)) await writeFile(path, '[]');
+        await access(path);
+
+        return <FHandle>await open(path, 'r+');
     }
 }

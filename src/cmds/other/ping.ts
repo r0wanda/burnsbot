@@ -3,9 +3,9 @@ import { SlashCommandBuilder, hyperlink, type CommandInteraction } from "discord
 export default class Ping {
     data: SlashCommandBuilder;
     constructor() {
-        this.data = new SlashCommandBuilder();
-        this.data.setName('ping');
-        this.data.setDescription('ping pong');
+        this.data = new SlashCommandBuilder()
+                    .setName('ping')
+                    .setDescription('ping pong');
     }
     async exec(int: CommandInteraction) {
         await int.reply(hyperlink('pong', 'https://scratch.mit.edu/projects/903910265/'));

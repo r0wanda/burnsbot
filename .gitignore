@@ -4,3 +4,5 @@ yarn.lock
 yarn-error.log
 .env
 cmdcache
+oldcache
+whitelist

@@ -6,8 +6,9 @@
   "types": "dist/index.d.ts",
   "type": "module",
   "scripts": {
-    "prepublishOnly": "tsc && cpx src/*.json",
-    "test": "nodemon"
+    "prepublishOnly": "time tsc && cp src/{emojis.json,statuses.json} dist/",
+    "test": "npm run prepublishOnly && node .",
+    "cloc": "cloc . --exclude-dir=node_modules,dist --exclude-ext=json"
   },
   "repository": {
     "type": "git",
@@ -20,23 +21,30 @@
   },
   "homepage": "https://github.com/r0wanda/burnsbot#readme",
   "devDependencies": {
+    "@types/dotenv": "^8.2.0",
+    "@types/express": "^4.17.21",
+    "@types/express-ws": "^3.0.4",
     "@types/node": "^20.12.7",
+    "@types/sd-notify": "^2.8.2",
+    "@types/ws": "^8.5.10",
     "cpx": "^1.5.0",
-    "eslint": "^9.1.1",
     "nodemon": "^3.1.0",
-    "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
   },
   "dependencies": {
     "@discordjs/formatters": "^0.3.3",
     "@discordjs/voice": "^0.16.1",
-    "@types/dotenv": "^8.2.0",
+    "@ngrok/ngrok": "^1.2.0",
     "bufferutil": "^4.0.8",
     "desm": "^1.3.1",
     "discord.js": "^14.14.1",
     "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-ws": "^5.0.2",
+    "got": "^14.2.1",
+    "ngrok-rpi": "r0wanda/ngrok-rpi",
     "ora": "^8.0.1",
-    "utf-8-validate": "^6.0.3",
-    "zlib-sync": "^0.1.9"
+    "sd-notify": "^2.8.0",
+    "ws": "^8.17.0"
   }
 }

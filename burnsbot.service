@@ -1,0 +1,12 @@
+[Unit]
+Description=Mr Burns Discord Bot
+After=network-online.target
+
+[Service]
+Type=notify
+User=rowan
+ExecStart=bash -c "cd /opt/burns && node ."
+ExecStop=bash -c "cd /opt/burns && node dist/kill.js"
+
+[Install]
+WantedBy=default.target
