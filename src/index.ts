@@ -76,7 +76,10 @@ const intents = [
 let client = <ClientExtra>new Client({
     intents
 });
-server.on('transfer', client.destroy);
+server.on('transfer', () => {
+    if (!client.rest) client.rest = new REST();
+    client.destroy()
+});
 server.on('start', () => {
     client = <ClientExtra>new Client({
         intents
