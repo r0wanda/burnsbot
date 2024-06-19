@@ -11,6 +11,16 @@ import { cp, rm, mkdir, writeFile as wf, readFile as rf, readdir } from 'node:fs
 
 const ora = (text: string) => _ora({ text, spinner: 'bouncingBall' }).start();
 
+export interface CmdCache {
+    [key: string]: any[] | {
+        acts: any[],
+        ts: number
+    }
+}
+export interface CmdCacheNorm {
+    [key: string]: string;
+}
+
 export default class Server extends EventEmitter {
     transPort: number;
     transApp: expressWs.Application;
@@ -25,17 +35,6 @@ export default class Server extends EventEmitter {
         this.transPort = port;
         this.transApp = <expressWs.Application><unknown>express();
         expressWs(this.transApp);
-        async function getCache() {
-            const c: { [key: string]: any; } = {};
-            const cache = join(process.cwd(), 'cmdcache');
-            if (!ex(cache)) throw new Error('cache is empty');
-            const d = await readdir(cache);
-            if (d.length < 1) throw new Error('cache is empty');
-            for (const f of d) {
-                c[f] = await rf(join(cache, f), 'utf8');
-            }
-            return c;
-        }
         this.transApp.get('/ping', (req, res) => {
             console.log('got ping from other server, prepare for exit routine');
             res.send('pong');
@@ -62,21 +61,59 @@ export default class Server extends EventEmitter {
             let done = false;
             ws.on('message', async (data) => {
                 let d = data.toString('utf8');
+                let c: CmdCacheNorm = {};
+                let e = false;
                 switch (d) {
                     case 'ok':
                     case 'err': {
-                        const c = JSON.stringify(await getCache());
+                        c = await Server.getCache(true);
+                        const cs = JSON.stringify(c);
                         const hshAlg = crypto.createHash('sha256');
-                        hshAlg.update(c);
+                        hshAlg.update(cs);
                         const hsh = hshAlg.digest('hex');
-                        ws.send(`cache${hsh}${c}`);
+                        ws.send(`cache${hsh}${cs}`);
                         break;
                     }
                     case 'allgood':
                         done = true;
+                        if (e) await Server.refreshCache(c, ora('Copying old cache'));
                         this.emit('shutdown');
                         ws.close();
                         break;
+                    default: {
+                        if (d.startsWith('new')) {
+                            if (!e) e = true;
+                            /*
+                             * format is "cache{key hash}{data hash}{key}|{data}"
+                             * where {data} is a single cached command in format [data] or { acts: [data], ts: *timestamp* }
+                             * and where {data hash} is a sha256 hash of the data and {key hash} is a sha256 hash of the key
+                             */
+                            d = d.slice(3); // length of "new"
+                            const kHsh = d.slice(0, 64);
+                            const hsh = d.slice(64, 128);
+                            const main = d.slice(128);
+                            const [key, data] = main.split('|');
+                            console.log(`Replacing outdated cache item ${key}, reported hash: ${hsh}, key hash ${kHsh}`);
+                            try {
+                                let hAlg = crypto.createHash('sha256');
+                                hAlg.update(key);
+                                const nKHsh = hAlg.digest('hex');
+                                hAlg.destroy();
+                                hAlg = crypto.createHash('sha256');
+                                hAlg.update(data);
+                                const nHsh = hAlg.digest('hex');
+                                if (nHsh !== hsh || nKHsh !== kHsh) {
+                                    console.warn('Recieved hash does not match!');
+                                    throw new Error();
+                                }
+                                c[key] = data;
+                                ws.send('ok');
+                            } catch (err) {
+                                console.error(err);
+                                ws.send('err');
+                            }
+                        }
+                    }
                 }
             });
             ws.on('close', () => {
@@ -87,6 +124,20 @@ export default class Server extends EventEmitter {
             });
         });
         this.server = this.transApp.listen(port);
+    }
+    static async getCache(str?: false): Promise<CmdCache>
+    static async getCache(str?: true): Promise<CmdCacheNorm>
+    static async getCache(str = false): Promise<CmdCache | CmdCacheNorm> {
+        const c: { [key: string]: any; } = {};
+        const cache = join(process.cwd(), 'cmdcache');
+        if (!ex(cache)) throw new Error('cache is empty');
+        const d = await readdir(cache);
+        if (d.length < 1) throw new Error('cache is empty');
+        for (const f of d) {
+            const r = await rf(join(cache, f), 'utf8');
+            c[f] = str ? r : JSON.parse(r);
+        }
+        return c;
     }
     static retry(fn: (tries: number) => (void | boolean | Promise<void | boolean>), int = 1000, tries = 10) {
         return new Promise<AggregateError | false>((r) => {
@@ -111,7 +162,7 @@ export default class Server extends EventEmitter {
             const i = setInterval(f, int);
         });
     }
-    static async refreshCache(c: { [key: string]: any[] }, spin: ReturnType<typeof ora>) {
+    static async refreshCache(c: CmdCacheNorm, spin: ReturnType<typeof ora>) {
         spin.text = 'Copying old cache';
         const cwd = process.cwd();
         const cache = join(cwd, 'cmdcache');
@@ -175,6 +226,59 @@ export default class Server extends EventEmitter {
         }
         spin.succeed('Alt server is alive');
     }
+    static async reconstructCache(ws: Ws, cache: CmdCacheNorm): Promise<CmdCacheNorm> {
+        let spin = ora('Reconstructing cache');
+        let ch: CmdCacheNorm = {};
+        const loc = await Server.getCache(false);
+        const errs: unknown[] = [];
+        for (const k in cache) {
+            let v: CmdCache[''];
+            let lv: CmdCache[''] = loc[k];
+            try {
+                v = JSON.parse(cache[k]);
+            } catch (err) {
+                errs.push(err);
+                continue;
+            }
+            if (
+                !lv ||
+                (!Array.isArray(v) && Array.isArray(lv)) ||
+                (!Array.isArray(v) && !Array.isArray(lv) && v.ts > lv.ts)
+            ) ch[k] = JSON.stringify(Array.isArray(v) ? v : v.acts);
+            else {
+                ch[k] = JSON.stringify(Array.isArray(lv) ? lv : lv.acts);
+                let retry = true;
+                do {
+                    retry = false;
+                    try {
+                        let hshAlg = crypto.createHash('sha256');
+                        hshAlg.update(k);
+                        const kHsh = hshAlg.digest('hex');
+                        hshAlg.destroy();
+                        hshAlg = crypto.createHash('sha256');
+                        hshAlg.update(ch[k]);
+                        const hsh = hshAlg.digest('hex');
+                        ws.send(`new${kHsh}${hsh}${k}|${ch[k]}`);
+                        await new Promise<void>(r => {
+                            ws.once('message', d => {
+                                const m = d.toString('utf8');
+                                if (m === 'ok') r();
+                                else if (m === 'err') throw new Error('Invalid hash');
+                            });
+                        });
+                    } catch (err) {
+                        retry = true;
+                        errs.push(err);
+                    }
+                } while (retry);
+            }
+        }
+        if (errs.length) {
+            spin.fail('Error(s) occured reconstructing cache');
+            console.error(new AggregateError(errs));
+        }
+        return ch;
+    }
     static async connect(ip: string, port?: number, ret?: true): Promise<Server>
     static async connect(ip: string, port?: number, ret?: false): Promise<void>
     static async connect(ip: string, port = 8089, ret = true): Promise<void | Server> {
@@ -187,7 +291,7 @@ export default class Server extends EventEmitter {
         }
         let spin = ora('Connecting to alt server websocket');
         const ev = new class extends EventEmitter { };
-        let cache: { [key: string]: any[]; } = {};
+        let cache: CmdCacheNorm = {};
         const ws = new Ws(`${url}`);
         ws.on('error', console.error);
         ws.on('message', (data) => {
@@ -196,6 +300,7 @@ export default class Server extends EventEmitter {
                 /*
                  * format is "cache{data hash}{data}"
                  * where {data} is all of the current cached commands in format { "filename": [data] }
+                 * or { "filename": { acts: [data], ts: *timestamp* } }
                  * and where {data hash} is a sha256 hash of the data
                  */
                 d = d.slice(5); // length of "cache"
@@ -223,9 +328,11 @@ export default class Server extends EventEmitter {
             ws.send('ok');
         });
         await new Promise(r => ev.on('cache', r));
+        ws.removeAllListeners('message');
         spin.succeed('Hash matched and JSON ok!');
         spin = ora('Setting up cache');
-        await Server.refreshCache(cache, spin);
+        const normCache = await this.reconstructCache(ws, cache);
+        await Server.refreshCache(normCache, spin);
         let s: Server | undefined;
         if (ret) s = new Server(ip, port);
         ws.send('allgood');

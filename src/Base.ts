@@ -26,7 +26,9 @@ export default class Base<A extends Action> extends Cache implements GenericCmdI
     constructor(name: string) {
         super(name, async () => {
             this.cache = await this.fd.read();
-            this.acts = JSON.parse(this.cache.buffer.toString('utf8', 0, this.cache.bytesRead));
+            const a = JSON.parse(this.cache.buffer.toString('utf8', 0, this.cache.bytesRead));
+            if (Array.isArray(a)) this.acts = a;
+            else this.acts = a.acts;
         });
         this.#action = <(a: A) => Promise<void>><unknown>undefined;
         this.ids = new Collection<string, Action>();
@@ -39,12 +41,15 @@ export default class Base<A extends Action> extends Cache implements GenericCmdI
         this.data = <SlashCommandBuilder><unknown>undefined;
     }
     async write() {
-        const w = await this.fd.write(JSON.stringify(this.acts), 0);
+        const w = await this.fd.write(JSON.stringify({
+            acts: this.acts,
+            ts: Date.now()
+        }), 0);
         await this.fd.truncate(w.bytesWritten);
         this.cache = await this.fd.read({
             position: 0
         });
-        if (this.cache.buffer.byteLength > 1) this.acts = JSON.parse(this.cache.buffer.toString('utf8', 0, this.cache.bytesRead));
+        if (this.cache.buffer.byteLength > 1) this.acts = JSON.parse(this.cache.buffer.toString('utf8', 0, this.cache.bytesRead)).acts;
     }
     setAction(act: (a: A) => Promise<void>) {
         this.#action = act;

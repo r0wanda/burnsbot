@@ -230,10 +230,31 @@ client.on('ready', async c => {
             type = <number>i[1] ?? ActivityType.Custom;
             st = <string>i[0] || 'swbat';
         } else st = i;
-        c.user.setActivity({
-            type,
-            name: st
-        });
+        let retry = false;
+        const errs: unknown[] = [];
+        do {
+            try {
+                c.user.setActivity({
+                    type,
+                    name: st
+                });
+            } catch (err) {
+                errs.push(err);
+                if (!retry) {
+                    type = ActivityType.Custom;
+                } else {
+                    retry = false;
+                    try {
+                        c.user.setActivity({
+                            type: ActivityType.Custom,
+                            name: 'swbat'
+                        });
+                    } catch (err) {
+                        console.error(new AggregateError([...errs, err]));
+                    }
+                }
+            }
+        } while (retry);
     }
     updStat();
     setInterval(updStat, 6e4 * 5); // 5 minutes
