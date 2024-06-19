@@ -7,6 +7,8 @@ Type=notify
 User=rowan
 ExecStart=bash -c "cd /opt/burns && node ."
 ExecStop=bash -c "cd /opt/burns && node dist/kill.js"
+Restart=always
+RestartSec=10
 
 [Install]
 WantedBy=default.target

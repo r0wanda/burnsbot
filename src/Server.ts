@@ -45,7 +45,7 @@ export default class Server extends EventEmitter {
                 if (d.toString('utf8') !== 'ok') return;
                 ws.send('start');
                 try {
-                    await Server.connect(ip, port);
+                    await Server.connect(ip, port, false);
                     ws.send('ok');
                 } catch {
                     ws.send('error');
@@ -175,13 +175,15 @@ export default class Server extends EventEmitter {
         }
         spin.succeed('Alt server is alive');
     }
-    static async connect(ip: string, port = 8089) {
+    static async connect(ip: string, port?: number, ret?: true): Promise<Server>
+    static async connect(ip: string, port?: number, ret?: false): Promise<void>
+    static async connect(ip: string, port = 8089, ret = true): Promise<void | Server> {
         const url = `http://${ip}:${port}/`;
         try {
             await Server._ping(ip, port);
         } catch (err) {
             console.error(err);
-            return new Server(ip, port);
+            if (ret) return new Server(ip, port);
         }
         let spin = ora('Connecting to alt server websocket');
         const ev = new class extends EventEmitter { };
@@ -224,8 +226,9 @@ export default class Server extends EventEmitter {
         spin.succeed('Hash matched and JSON ok!');
         spin = ora('Setting up cache');
         await Server.refreshCache(cache, spin);
-        const s = new Server(ip, port);
+        let s: Server | undefined;
+        if (ret) s = new Server(ip, port);
         ws.send('allgood');
-        return s;
+        if (ret && s) return s;
     }
 }
