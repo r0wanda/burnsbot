@@ -86,9 +86,6 @@ server.on('start', () => {
     });
     client.login(process.env.TOKEN);
 });
-server.on('shutdown', () => {
-    process.exit();
-});
 
 // load commands
 let spin = ora('Loading commands');
