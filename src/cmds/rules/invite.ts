@@ -168,7 +168,7 @@ export default class Sticker extends Base<InviteAct> {
             title: 'invite proposal',
             user: int.user.displayName,
             icon: int.user.avatarURL() || int.user.defaultAvatarURL,
-            userId: user,
+            userId: user.toString(),
             channel: msg.channelId,
             msg: msg.id,
             id
