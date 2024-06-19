@@ -5,8 +5,8 @@ After=network-online.target
 [Service]
 Type=notify
 User=rowan
-ExecStart=bash -c "cd /opt/burns && node ."
-ExecStop=bash -c "cd /opt/burns && node dist/kill.js"
+ExecStart=cd /opt/burns && node .
+ExecStop=cd /opt/burns && node dist/kill.js
 Restart=always
 RestartSec=10
 

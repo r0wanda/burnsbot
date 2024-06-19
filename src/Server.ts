@@ -242,6 +242,7 @@ export default class Server extends EventEmitter {
             }
             if (
                 !lv ||
+                (Array.isArray(v) && Array.isArray(lv)) ||
                 (!Array.isArray(v) && Array.isArray(lv)) ||
                 (!Array.isArray(v) && !Array.isArray(lv) && v.ts > lv.ts)
             ) ch[k] = JSON.stringify(Array.isArray(v) ? v : v.acts);
@@ -277,6 +278,7 @@ export default class Server extends EventEmitter {
             spin.fail('Error(s) occured reconstructing cache');
             console.error(new AggregateError(errs));
         }
+        spin.succeed();
         return ch;
     }
     static async connect(ip: string, port?: number, ret?: true): Promise<Server>
