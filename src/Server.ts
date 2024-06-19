@@ -75,6 +75,7 @@ export default class Server extends EventEmitter {
                     case 'allgood':
                         done = true;
                         this.emit('shutdown');
+                        ws.close();
                         break;
                 }
             });
@@ -122,7 +123,9 @@ export default class Server extends EventEmitter {
             force: true
         });
         if (chEx) {
-            await cp(cache, oCache);
+            await cp(cache, oCache, {
+                recursive: true
+            });
             await rm(cache, {
                 recursive: true,
                 force: true
@@ -131,7 +134,7 @@ export default class Server extends EventEmitter {
         } else await mkdir(cache);
         spin.text = 'Writing new cache';
         for (const k in c) {
-            await wf(join(cache, k), JSON.stringify(c[k]));
+            await wf(join(cache, k), c[k]);
         }
         const dir = await readdir(cache);
         if (Object.keys(c).some(f => !dir.includes(f))) throw new Error('Not all files were written while updating cache');
@@ -177,7 +180,7 @@ export default class Server extends EventEmitter {
         try {
             await Server._ping(ip, port);
         } catch (err) {
-            throw err;
+            console.error(err);
             return new Server(ip, port);
         }
         let spin = ora('Connecting to alt server websocket');
