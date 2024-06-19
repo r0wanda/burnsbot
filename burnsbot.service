@@ -4,7 +4,6 @@ After=network-online.target
 
 [Service]
 Type=notify
-User=rowan
 ExecStart=cd /opt/burns && node .
 ExecStop=cd /opt/burns && node dist/kill.js
 Restart=always
