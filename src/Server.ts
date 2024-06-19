@@ -205,9 +205,10 @@ export default class Server extends EventEmitter {
                         spin.text = 'Recieved hash does not match!';
                         throw new Error();
                     }
-                    cache = JSON.parse(d);
+                    cache = JSON.parse(data);
                     ev.emit('cache');
-                } catch {
+                } catch (err) {
+                    console.error(err);
                     ws.send('err');
                 }
             } else ws.send('err');

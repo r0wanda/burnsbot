@@ -84,7 +84,7 @@ server.on('start', () => {
     client = <ClientExtra>new Client({
         intents
     });
-    client.login();
+    client.login(process.env.TOKEN);
 });
 
 // load commands
