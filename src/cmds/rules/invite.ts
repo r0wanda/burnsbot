@@ -27,9 +27,9 @@ export default class Sticker extends Base<InviteAct> {
         this.data = new SlashCommandBuilder()
                     .setName('invite')
                     .setDescription('invite a user to the server')
-                    .addStringOption(opt =>
+                    .addIntegerOption(opt =>
                         opt.setName('user')
-                        .setDescription('the username (eg. Mr. Burns#2546)')
+                        .setDescription('the user id')
                         .setRequired(true))
                     .addIntegerOption(opt =>
                         opt.setName('hours')
@@ -94,7 +94,7 @@ export default class Sticker extends Base<InviteAct> {
             return;
         }
         const user = int.options.get('user', true).value;
-        if (!user || typeof user !== 'string') {
+        if (!user || typeof user !== 'number') {
             await int.reply({
                 content: 'send an actual user next time',
                 ephemeral: true
@@ -103,17 +103,17 @@ export default class Sticker extends Base<InviteAct> {
         }
         let u;
         try {
-            u = await this.guild.client.users.fetch(user);
+            u = await this.guild.client.users.fetch(user.toString());
         } catch (err) {
             await int.reply({
-                content: `${err}`,
+                content: 'you have to use a user id (ask rowan how to get one)',
                 ephemeral: true
             });
             return;
         }
         if (!u) {
             await int.reply({
-                content: 'send an actual user next time',
+                content: 'you have to use a user id (ask rowan how to get one)',
                 ephemeral: true
             });
             return;

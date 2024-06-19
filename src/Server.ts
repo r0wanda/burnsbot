@@ -9,19 +9,12 @@ import EventEmitter from 'node:events';
 import { existsSync as ex } from 'node:fs';
 import { cp, rm, mkdir, writeFile as wf, readFile as rf, readdir } from 'node:fs/promises';
 
-type ngrok = typeof import('@ngrok/ngrok');
-let ngrok: ngrok;
-if (process.env.DEVICE_TYPE === 'rpi') ngrok = <typeof ngrok><unknown>(await import('ngrok-rpi')).default;
-else ngrok = <typeof ngrok><unknown>(await import('@ngrok/ngrok')).default;
-
 const ora = (text: string) => _ora({ text, spinner: 'bouncingBall' }).start();
 
 export default class Server extends EventEmitter {
     ngPort: number;
     transPort: number;
     transApp: expressWs.Application;
-    app: express.Application;
-    ngrok: Promise<InstanceType<ngrok['Listener']>>;
     /**
      * Web server constructor
      * @param ip string
@@ -33,7 +26,6 @@ export default class Server extends EventEmitter {
         this.ngPort = ngPort;
         this.transPort = transPort;
         this.transApp = <expressWs.Application><unknown>express();
-        this.app = express();
         expressWs(this.transApp);
         async function getCache() {
             const c: { [key: string]: any; } = {};
@@ -82,12 +74,7 @@ export default class Server extends EventEmitter {
                 }
             });
         });
-        this.app.listen(ngPort);
         this.transApp.listen(transPort);
-        this.ngrok = ngrok.connect({
-            addr: ngPort,
-            authtoken_from_env: true
-        });
     }
     static retry(fn: (tries: number) => (void | boolean | Promise<void | boolean>), int = 1000, tries = 10) {
         return new Promise<void>((r, j) => {
