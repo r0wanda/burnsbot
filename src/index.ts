@@ -7,7 +7,7 @@ import notify from 'sd-notify';
 import { join as pJoin } from 'node:path';
 import { closeSync as close, readFileSync as rf } from 'node:fs';
 import { readdir, type FileHandle } from 'node:fs/promises';
-import { Client, Collection, GatewayIntentBits, REST, Routes, ActivityType,
+import { Client, Collection, GatewayIntentBits as gib, REST, Routes, ActivityType,
     type SlashCommandBuilder, type CommandInteraction, type RESTPostAPIChatInputApplicationCommandsJSONBody, type Guild } from 'discord.js';
 import Base, { type Action } from './Base.js';
 import Server from './Server.js';
@@ -54,13 +54,33 @@ if (process.env.DEVICE_TYPE.toLowerCase() !== 'rpi') {
     server = await Server.connect(process.env.OTHER_IP);
 } else server = new Server(process.env.OTHER_IP);
 
-const client = <ClientExtra>new Client({
-    intents: [
-        ...<number[]>Object.values(GatewayIntentBits)
-    ]
+const intents = [
+    gib.AutoModerationConfiguration,
+    gib.AutoModerationExecution,
+    gib.GuildEmojisAndStickers,
+    gib.GuildIntegrations,
+    gib.GuildInvites,
+    gib.GuildMembers,
+    gib.GuildMessagePolls,
+    gib.GuildMessageReactions,
+    gib.GuildMessageTyping,
+    gib.GuildMessages,
+    gib.GuildModeration,
+    gib.GuildPresences,
+    gib.GuildScheduledEvents,
+    gib.GuildVoiceStates,
+    gib.GuildWebhooks,
+    gib.Guilds,
+    gib.MessageContent
+];
+let client = <ClientExtra>new Client({
+    intents
 });
 server.on('transfer', client.destroy);
 server.on('start', () => {
+    client = <ClientExtra>new Client({
+        intents
+    });
     client.login();
 });
 

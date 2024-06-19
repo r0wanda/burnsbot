@@ -88,20 +88,22 @@ export default class Server extends EventEmitter {
         this.server = this.transApp.listen(port);
     }
     static retry(fn: (tries: number) => (void | boolean | Promise<void | boolean>), int = 1000, tries = 10) {
-        return new Promise<void>((r, j) => {
+        return new Promise<AggregateError | false>((r) => {
             let t = 0;
+            const errs: unknown[] = [];
             const f = async () => {
                 try {
                     const f = await fn(t);
                     if (typeof f === 'boolean' && !f) throw new Error();
                     clearInterval(i);
-                    r();
-                } catch {
+                    r(false);
+                } catch (err) {
+                    errs.push(err);
                     t++;
                 }
                 if (t >= tries) {
                     clearInterval(i);
-                    j(`Function did not succeed in ${tries} tries`);
+                    r(new AggregateError(errs));
                 }
             }
             f();
@@ -154,23 +156,30 @@ export default class Server extends EventEmitter {
         const tries = process.env.DEVICE_TYPE === 'rpi' ? 50 : 10;
         let spin = ora(`Pinging alt server (try 0/${tries})`);
         try {
-            await Server.retry(async (t) => {
+            const r = await Server.retry(async (t) => {
                 spin.text = `Pinging alt server (try ${t}/${tries})`;
                 const r = await got(`${url}ping`, {
-                    // @ts-ignore
-                    timeout: 2000,
+                    timeout: {
+                        response: 2000
+                    },
                 }).text();
                 if (r !== 'pong') return false;
             }, 2000, tries);
-        } catch {
+            if (r) throw r;
+        } catch (err) {
             spin.fail();
-            return new Server(ip, port);
+            throw err;
         }
         spin.succeed('Alt server is alive');
     }
     static async connect(ip: string, port = 8089) {
         const url = `http://${ip}:${port}/`;
-        await Server._ping(ip, port);
+        try {
+            await Server._ping(ip, port);
+        } catch (err) {
+            throw err;
+            return new Server(ip, port);
+        }
         let spin = ora('Connecting to alt server websocket');
         const ev = new class extends EventEmitter { };
         let cache: { [key: string]: any[]; } = {};
