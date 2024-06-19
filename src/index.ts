@@ -52,7 +52,7 @@ export type ClientExtra = Client & {
 let server;
 if (process.env.DEVICE_TYPE.toLowerCase() !== 'rpi') {
     server = await Server.connect(process.env.OTHER_IP);
-} else server = new Server();
+} else server = new Server(process.env.OTHER_IP);
 
 const client = <ClientExtra>new Client({
     intents: [
@@ -204,8 +204,8 @@ client.on('ready', async c => {
         let type: number = ActivityType.Custom;
         let st;
         if (Array.isArray(i)) {
-            type = <number>i[1];
-            st = <string>i[0];
+            type = <number>i[1] ?? ActivityType.Custom;
+            st = <string>i[0] || 'swbat';
         } else st = i;
         c.user.setActivity({
             type,

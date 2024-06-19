@@ -12,19 +12,17 @@ import { cp, rm, mkdir, writeFile as wf, readFile as rf, readdir } from 'node:fs
 const ora = (text: string) => _ora({ text, spinner: 'bouncingBall' }).start();
 
 export default class Server extends EventEmitter {
-    ngPort: number;
     transPort: number;
     transApp: expressWs.Application;
+    server: ReturnType<expressWs.Application['listen']>;
     /**
      * Web server constructor
      * @param ip string
-     * @param ngPort ngrok port to use
-     * @param transPort DEPRECATED: WILL BREAK IF NOT SYNCED - port for transmissions between rpi and computer
+     * @param port DEPRECATED: WILL BREAK IF NOT SYNCED - port for transmissions between rpi and computer
      */
-    constructor(ngPort = 8088, transPort = 8089) {
+    constructor(ip: string, port = 8089) {
         super();
-        this.ngPort = ngPort;
-        this.transPort = transPort;
+        this.transPort = port;
         this.transApp = <expressWs.Application><unknown>express();
         expressWs(this.transApp);
         async function getCache() {
@@ -42,15 +40,28 @@ export default class Server extends EventEmitter {
             console.log('got ping from other server, prepare for exit routine');
             res.send('pong');
         });
+        this.transApp.ws('/shut', async (ws, req) => {
+            ws.on('message', async (d) => {
+                if (d.toString('utf8') !== 'ok') return;
+                ws.send('start');
+                try {
+                    await Server.connect(ip, port);
+                    ws.send('ok');
+                } catch {
+                    ws.send('error');
+                }
+                ws.close();
+            });
+        });
         this.transApp.get('/', (req, res) => {
             res.send('you found mr burns\' web server! very cool');
-        })
-        this.transApp.ws('/', (ws, req, next) => {
+        });
+        this.transApp.ws('/', (ws, req) => {
             this.emit('transfer');
             console.log('exit routine starting! websocket established, no more commands accepted.');
             let done = false;
             ws.on('message', async (data) => {
-                let d = data.toString();
+                let d = data.toString('utf8');
                 switch (d) {
                     case 'ok':
                     case 'err': {
@@ -74,7 +85,7 @@ export default class Server extends EventEmitter {
                 }
             });
         });
-        this.transApp.listen(transPort);
+        this.server = this.transApp.listen(port);
     }
     static retry(fn: (tries: number) => (void | boolean | Promise<void | boolean>), int = 1000, tries = 10) {
         return new Promise<void>((r, j) => {
@@ -124,7 +135,21 @@ export default class Server extends EventEmitter {
         if (Object.keys(c).some(f => !dir.includes(f))) throw new Error('Not all files were written while updating cache');
         spin.succeed('Cache backed up and refreshed');
     }
-    static async connect(ip: string, port = 8089, ngPort = 8088) {
+    static shut(ip: string, port = 8089) {
+        return new Promise<void>(async r => {
+            const url = `http://${ip}:${port}/`;
+            await Server._ping(ip, port);
+            const ws = new Ws(`${url}shut`);
+            ws.on('message', (d) => {
+                if (d.toString('utf8') === 'error') throw new Error('error shutting down');
+                else if (d.toString('utf8') === 'ok') r(console.log('shutdown ok'));
+            });
+            ws.on('open', () => {
+                ws.send('ok');
+            });
+        });
+    }
+    static async _ping(ip: string, port = 8089) {
         const url = `http://${ip}:${port}/`;
         const tries = process.env.DEVICE_TYPE === 'rpi' ? 50 : 10;
         let spin = ora(`Pinging alt server (try 0/${tries})`);
@@ -139,16 +164,20 @@ export default class Server extends EventEmitter {
             }, 2000, tries);
         } catch {
             spin.fail();
-            return new Server(ngPort, port)
+            return new Server(ip, port);
         }
         spin.succeed('Alt server is alive');
-        spin = ora('Connecting to alt server websocket');
+    }
+    static async connect(ip: string, port = 8089) {
+        const url = `http://${ip}:${port}/`;
+        await Server._ping(ip, port);
+        let spin = ora('Connecting to alt server websocket');
         const ev = new class extends EventEmitter { };
         let cache: { [key: string]: any[]; } = {};
         const ws = new Ws(`${url}`);
         ws.on('error', console.error);
         ws.on('message', (data) => {
-            let d = data.toString();
+            let d = data.toString('utf8');
             if (d.startsWith('cache')) {
                 /*
                  * format is "cache{data hash}{data}"
@@ -182,7 +211,7 @@ export default class Server extends EventEmitter {
         spin.succeed('Hash matched and JSON ok!');
         spin = ora('Setting up cache');
         await Server.refreshCache(cache, spin);
-        const s = new Server(ngPort, port);
+        const s = new Server(ip, port);
         ws.send('allgood');
         return s;
     }
