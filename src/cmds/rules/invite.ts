@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import Base, { type Action } from "../../Base.js";
 import { FHandle } from "../../Cache.js";
 import { join } from "node:path";
+import { join as djoin } from 'desm';
 
 const botChannel = process.env.BOT_CHANNEL!;
 const ron = process.env.RON!;
@@ -54,7 +55,7 @@ export default class Sticker extends Base<InviteAct> {
     async whitelist() {
         if (!this.guild) throw new Error('Guild not found'); // should never happen
         if (!this.whiteFd) {
-            this.whiteFd = await this.createFd(join(process.cwd(), 'whitelist'));
+            this.whiteFd = await this.createFd(djoin(import.meta.url, 'cmdcache', 'whitelist'));
             this.whiteCache = await this.whiteFd.read();
             this.white = JSON.parse(this.whiteCache.buffer.toString('utf8', 0, this.whiteCache.bytesRead));
         }
